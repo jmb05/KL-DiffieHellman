@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+    <object class="GtkApplicationWindow" id="window">
+        <property name="title" translatable="yes">KL-DiffieHellman</property>
+        <property name="default-width">480</property>
+        <property name="default-height">400</property>
+        <child>
+            <object class="GtkBox" id="v_box">
+                <property name="orientation">vertical</property>
+                <child>
+                    <object class="GtkScrolledWindow" id="scrolled_window">
+                        <property name="hexpand">True</property>
+                        <property name="vexpand">True</property>
+                        <child>
+                            <object class="GtkTextView" id="text_view">
+                                <property name="editable">False</property>
+                                <property name="cursor-visible">False</property>
+                                <property name="left-margin">10</property>
+                                <property name="top-margin">10</property>
+                                <property name="wrap-mode">GTK_WRAP_WORD</property>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkEntry" id="input_field"/>
+                </child>
+            </object>
+        </child>
+    </object>
+</interface>
