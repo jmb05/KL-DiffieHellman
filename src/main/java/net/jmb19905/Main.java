@@ -1,10 +1,11 @@
 package net.jmb19905;
 
 import ch.bailu.gtk.type.Str;
+import com.formdev.flatlaf.FlatDarkLaf;
 import net.jmb19905.crypto.AESEncryption;
-import net.jmb19905.crypto.CaesarEncryption;
 import net.jmb19905.net.*;
 import net.jmb19905.net.event.ActiveEventListener;
+import net.jmb19905.net.event.ExceptionEventListener;
 import net.jmb19905.net.event.InactiveEventListener;
 import net.jmb19905.net.packet.PacketRegistry;
 import net.jmb19905.net.tcp.ClientTcpThread;
@@ -13,20 +14,20 @@ import net.jmb19905.packet.*;
 import net.jmb19905.util.Logger;
 import net.jmb19905.util.ShutdownManager;
 
+import javax.swing.*;
 import java.math.BigInteger;
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
 
-    public static boolean caesars = false;
-    public static String parameterFile = "dhparam.jparam";
+    public static final String PARAMETER_FILE = "dhparam.jparam";
+    public static final int PORT = 38462;
     public static BigInteger prime;
     public static BigInteger base;
     public static BigInteger publicKey;
@@ -35,21 +36,30 @@ public class Main {
     public static byte modulo;
     public static byte[] hash;
     public static boolean sentHandshake = false;
+    public static boolean encryptionEnabled = true;
     private static final AtomicReference<SocketAddress> address = new AtomicReference<>();
     private static NetThread thread;
     public static App app;
 
     public static void main(String[] args) {
-        if (args.length == 0) {
-            Logger.error("Specify Type (and Mode) as argument");
-            Logger.info("Example: \"startcommand server\", \"startcommand server-simple\", \"startcommand client\"");
-            ShutdownManager.shutdown(-1);
-        }
+        FlatDarkLaf.setup();
+        int option = JOptionPane.showOptionDialog(null,
+                "Möchten sie einen Server oder einen Klient starten?", "",
+                JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
+                new String[]{"Server", "Klient"}, "Server");
+        String signature = switch (option) {
+            case JOptionPane.NO_OPTION -> "client";
+            case JOptionPane.CANCEL_OPTION | JOptionPane.CLOSED_OPTION -> {
+                ShutdownManager.shutdown(0);
+                throw new IllegalStateException("Reached unreachable code");
+            }
+            default -> "server";
+        };
 
-        Logger.initLogFile("kldiffiehellman-" + args[0]);
+        Logger.initLogFile("kldiffiehellman-" + signature);
 
         if (System.getProperty("os.name").equals("Linux")) {
-            app = new GtkApp(args[0]);
+            app = new GtkApp(signature);
         } else {
             app = new SwingApp();
         }
@@ -57,21 +67,15 @@ public class Main {
         PacketRegistry.getInstance().register(TextPacket.class, new TextPacketHandler());
         PacketRegistry.getInstance().register(ParametersPacket.class, new ParametersPacketHandler());
         PacketRegistry.getInstance().register(HandshakePacket.class, new HandshakePacketHandler());
+        PacketRegistry.getInstance().register(EncryptionStatePacket.class, new EncryptionSatePacketHandler());
 
         Endpoint endpoint;
 
-        switch (args[0].substring(0, 6)) {
+        switch (signature) {
             case  "server" -> {
-                if (args[0].endsWith("simple")) {
-                    caesars = true;
-                    parameterFile = "dhparam-simple.jparam";
-                    Logger.info("Mode: Simple");
-                } else {
-                    Logger.info("Mode: Normal");
-                }
                 endpoint = new Server();
-                thread = endpoint.addTcp(38462);
-                var param = ParamParser.parse(parameterFile);
+                thread = endpoint.addTcp(PORT);
+                var param = ParamParser.parse(PARAMETER_FILE);
                 if (param == null) {
                     Logger.fatal("Invalid Parameters: null");
                     ShutdownManager.shutdown(-1);
@@ -81,49 +85,65 @@ public class Main {
                 base = param.base();
                 chooseSecret();
                 calcPublicKey();
+                app.appendMessage("Warten auf Klient...");
                 ((ServerTcpThread) thread).addDefaultEventListener((ActiveEventListener) e -> {
                     Logger.info("Server Channel active...");
                     address.set(e.getContext().remoteAddress());
-                    e.getContext().send(ParametersPacket.create(prime, base, caesars));
-                    app.appendMessage("Client connected");
+                    e.getContext().send(ParametersPacket.create(prime, base));
+                    app.appendMessage("Mit Klient verbunden");
                 });
                 ((ServerTcpThread) thread).addDefaultEventListener((InactiveEventListener) e -> {
                     Logger.info("Server Channel inactive...");
                     address.set(null);
-                    app.appendMessage("Client disconnected");
+                    app.appendMessage("Von Klient getrennt");
                 });
             }
             case  "client" -> {
-                endpoint = new Client("localhost");
-                thread = endpoint.addTcp(38462);
+                String addressStr = JOptionPane.showInputDialog("Serveradresse eingeben: ", "localhost");
+                endpoint = new Client(addressStr);
+                thread = endpoint.addTcp(PORT);
                 ((ClientTcpThread) thread).addEventListener((ActiveEventListener) e -> {
                     Logger.info("Client Channel active...");
                     address.set(e.getContext().remoteAddress());
-                    app.appendMessage("Connected to Server");
+                    app.appendMessage("Mit Server verbunden");
                 });
                 ((ClientTcpThread) thread).addEventListener((InactiveEventListener) e -> {
                     Logger.info("Client Channel inactive...");
                     address.set(null);
-                    app.appendMessage("Disconnected from Server");
+                    app.appendMessage("Von Server getrennt");
+                    try {
+                        Thread.sleep(20);
+                        ShutdownManager.shutdown(0);
+                    } catch (InterruptedException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                });
+                ((ClientTcpThread) thread).addEventListener((ExceptionEventListener) e -> {
+                    if (e.getCause().getMessage().contains("Connection refused")) {
+                        JOptionPane.showMessageDialog(null, "Fehler: Verbindung fehlgeschlagen", "", JOptionPane.ERROR_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(null, "Fehler: Unbekannt", "", JOptionPane.ERROR_MESSAGE);
+                    }
+                    ShutdownManager.shutdown(1);
                 });
             }
-            default -> throw new IllegalStateException("Unexpected value: " + args[0]);
+            default -> throw new IllegalStateException("Unexpected value: " + signature);
         }
         thread.start();
-
         app.start(args);
     }
 
     public static void sendMessage(String text) {
-        if (Main.shared != null){
-            byte[] b;
-            if (Main.caesars) {
-                b = CaesarEncryption.encrypt(text.getBytes(StandardCharsets.UTF_8), Main.modulo);
-            } else {
-                b = AESEncryption.encrypt(text.getBytes(StandardCharsets.UTF_8), Main.hash);
-            }
+        if (Main.shared != null && encryptionEnabled){
+            byte[] b = AESEncryption.encrypt(text.getBytes(StandardCharsets.UTF_8), Main.hash);
             NetworkingUtility.send(thread, address.get(), TextPacket.create(b));
+        } else if (!encryptionEnabled) {
+            NetworkingUtility.send(thread, address.get(), TextPacket.create(text.getBytes(StandardCharsets.UTF_8)));
         }
+    }
+
+    public static void sendEncryptionState(boolean state) {
+        NetworkingUtility.send(thread, address.get(), EncryptionStatePacket.create(state));
     }
 
     public static boolean isDisconnected() {
@@ -141,18 +161,10 @@ public class Main {
 
     public static void calcShared(BigInteger otherPublic) {
         shared = otherPublic.modPow(secret, prime);
-        Logger.info(" Shared:       " + shared + " Bits: " + shared.bitLength());
-        Logger.info(" Other Public: " + otherPublic + " Bits: " + otherPublic.bitLength());
-        Logger.info(" Own Public:   " + publicKey + " Bits: " + publicKey.bitLength());
-        Logger.info(" Secret:       " + secret + " Bits: " + secret.bitLength());
-        Logger.info(" Prime:        " + prime + " Bits: " + prime.bitLength());
         modulo = shared.mod(BigInteger.valueOf(128)).byteValue();
-        Logger.info(" Caesar: " + modulo);
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             hash = digest.digest(shared.toByteArray());
-            String base64hash = Base64.getEncoder().encodeToString(hash);
-            Logger.info("Hash: " + base64hash);
         } catch (NoSuchAlgorithmException e) {
             Logger.error(e);
         }

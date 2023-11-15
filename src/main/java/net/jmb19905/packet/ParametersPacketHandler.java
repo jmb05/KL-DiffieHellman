@@ -11,7 +11,6 @@ public class ParametersPacketHandler implements PacketHandler<ParametersPacket> 
         Logger.info("Received Parameters");
         Main.prime = packet.prime;
         Main.base = packet.base;
-        Main.caesars = packet.caesars;
         Main.chooseSecret();
         Main.calcPublicKey();
         handlingContext.send(HandshakePacket.create(Main.publicKey));

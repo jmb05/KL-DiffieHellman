@@ -11,13 +11,11 @@ public class ParametersPacket extends Packet {
 
     public BigInteger prime;
     public BigInteger base;
-    public boolean caesars;
 
-    public static ParametersPacket create(BigInteger prime, BigInteger base, boolean caesars) {
+    public static ParametersPacket create(BigInteger prime, BigInteger base) {
         ParametersPacket packet = new ParametersPacket();
         packet.prime = prime;
         packet.base = base;
-        packet.caesars = caesars;
         return packet;
     }
 
@@ -30,13 +28,11 @@ public class ParametersPacket extends Packet {
     public void deconstruct(BufferWrapper bufferWrapper) {
         bufferWrapper.putBytes(prime.toByteArray());
         bufferWrapper.putBytes(base.toByteArray());
-        bufferWrapper.putBoolean(caesars);
     }
 
     @Override
     public void construct(BufferWrapper bufferWrapper) {
         prime = new BigInteger(bufferWrapper.getBytes());
         base = new BigInteger(bufferWrapper.getBytes());
-        caesars = bufferWrapper.getBoolean();
     }
 }

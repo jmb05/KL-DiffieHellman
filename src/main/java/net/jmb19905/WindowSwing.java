@@ -1,6 +1,5 @@
 package net.jmb19905;
 
-import com.formdev.flatlaf.FlatDarkLaf;
 import net.jmb19905.util.ShutdownManager;
 import net.jmb19905.util.events.EventHandler;
 import net.jmb19905.util.events.EventListener;
@@ -19,7 +18,6 @@ public class WindowSwing extends JFrame implements AppWindow {
     public WindowSwing() {
         eventHandler = new EventHandler<>("window_events");
         eventHandler.setValid(true);
-        FlatDarkLaf.setup();
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         ShutdownManager.addCleanupFirst(this::dispose);
         addWindowListener(new WindowAdapter() {
@@ -37,8 +35,14 @@ public class WindowSwing extends JFrame implements AppWindow {
 
         field = new JTextField();
         field.addActionListener(e -> {
-            eventHandler.performEvent(new Window.MessageSendEvent(new Window.WinEventCtx(this)));
-            appendMessage("<You> " + field.getText());
+            String text = getInputText();
+            if (text.isBlank()) return;
+            if (text.startsWith("/")) {
+                AppWindow.handleCommand(this, text);
+            } else {
+                eventHandler.performEvent(new Window.MessageSendEvent(new Window.WinEventCtx(this)));
+                appendMessage("<Du> " + field.getText());
+            }
             field.setText("");
         });
         add(field, BorderLayout.SOUTH);

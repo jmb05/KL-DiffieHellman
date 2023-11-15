@@ -31,8 +31,14 @@ public class Window implements AppWindow {
             textView = new TextView(builder.getObject("text_view"));
             inputField = new Entry(builder.getObject("input_field"));
             inputField.onActivate(() -> {
-                eventHandler.performEvent(new MessageSendEvent(new WinEventCtx(this)));
-                appendMessage("<You> " + getInputText());
+                String text = getInputText();
+                if (text.isBlank()) return;
+                if (text.startsWith("/")) {
+                    AppWindow.handleCommand(this, text);
+                } else {
+                    eventHandler.performEvent(new MessageSendEvent(new WinEventCtx(this)));
+                    appendMessage("<Du> " + getInputText());
+                }
                 new Editable(inputField.cast()).setText("");
             });
         } catch (IOException | AllocationError e) {
