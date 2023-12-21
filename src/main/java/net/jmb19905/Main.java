@@ -30,10 +30,9 @@ public class Main {
     public static final int PORT = 38462;
     public static BigInteger prime;
     public static BigInteger base;
-    public static BigInteger publicKey;
     private static BigInteger secret;
+    public static BigInteger publicKey;
     public static BigInteger shared;
-    public static byte modulo;
     public static byte[] hash;
     public static boolean sentHandshake = false;
     public static boolean encryptionEnabled = true;
@@ -161,7 +160,6 @@ public class Main {
 
     public static void calcShared(BigInteger otherPublic) {
         shared = otherPublic.modPow(secret, prime);
-        modulo = shared.mod(BigInteger.valueOf(128)).byteValue();
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             hash = digest.digest(shared.toByteArray());
